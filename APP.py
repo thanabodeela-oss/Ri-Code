@@ -245,6 +245,7 @@ def render_wlh_diagram_oriented(w, l, h, up="h", figsize=(2.6,2.0)):
 
 # ---------------- Summary card ----------------
 def render_summary_box(L,W,H,layers,per_layer,sa=None,tol=None,unit="cm",cartons_needed=None):
+    # หน่วยสำหรับแสดงผล จะส่ง "cm" เข้ามาเสมอ
     total = layers*per_layer
     st.markdown("""
     <style>
@@ -276,7 +277,7 @@ def render_summary_box(L,W,H,layers,per_layer,sa=None,tol=None,unit="cm",cartons
     if cartons_needed is not None:
         rows.append(("จำนวนกล่อง", f"{cartons_needed} กล่อง"))
     if sa is not None:
-        rows.append(("Surface Area", f"{sa:.2f}"))
+        rows.append(("Surface Area", f"{sa:.2f} {unit}²"))   # แสดงเป็น cm²
     if tol is not None:
         rows.append(("Tolerance", f"{tol:.2f} {unit}"))
 
@@ -291,7 +292,6 @@ def draw_pallet_boxes_3d(carton_L_cm, carton_W_cm, carton_H_cm,
                          pallet_height_cm=12.0, gap=0.0, scale=0.55,
                          placement="center"):  # "center" | "front_left" | "back_left"
     """วาดพาเลต + กองกล่อง โดยเลือกตำแหน่งการวางบนพาเลตได้"""
-
     from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
     def faces(x, y, z, dx, dy, dz):
@@ -369,7 +369,9 @@ def draw_pallet_boxes_3d(carton_L_cm, carton_W_cm, carton_H_cm,
             f"{int(round(used_H))} CM", rotation=90, va="center",
             fontsize=9, fontweight="bold")
 
-    return fig# ---------------- UI: 2 หน้าหลัก ----------------
+    return fig
+
+# ---------------- UI: 2 หน้าหลัก ----------------
 st.set_page_config(page_title="Carton Designer", layout="wide")
 st.markdown("""
 <style>
@@ -386,40 +388,90 @@ tab_carton, tab_pallet = st.tabs(["🎁 Giftbox ➜ Carton", "🧱 Carton ➜ Pa
 
 # ---------------- PAGE 1: Giftbox ➜ Carton ----------------
 with tab_carton:
-    col_main, col_side = st.columns([8,4], gap="large")
+    # ซ้าย = ลักษณะสินค้า, ขวา = ตั้งค่าการวาง + ระยะเผื่อ
+    col_left, col_right = st.columns([6.5,5.5], gap="large")
 
-    with col_main:
+    # ===== Block 1: ลักษณะของสินค้า =====
+    with col_left:
         st.markdown("<div class='card'>", unsafe_allow_html=True)
-        st.subheader("📝 ข้อมูลสินค้า (Giftbox)")
-        st.selectbox("ประเภทสินค้า", ["ทรงเหลี่ยม"], index=0, disabled=True)
-        st.divider()
+        st.subheader("🧩 ลักษณะของสินค้า")
 
-        c1,c2,c3 = st.columns(3)
+        # ลิสต์ลักษณะ (ยังไม่ผูกตั้งค่าอัตโนมัติ)
+        product_profiles = [
+            "— ไม่เลือก —",
+            "แท่งยาว/ดินสอ (ลิป, มาสคาร่า, ดินสอเขียนคิ้ว)",
+            "ของเหลว/ครีม (ลิปกลอส, ทินต์, อายไลเนอร์น้ำ)",
+            "มีชิ้นส่วนยื่น/โบว์/ฝาพับ",
+            "เปราะบาง/แตกง่าย",
+            "ต้องหงายกราฟิก/โลโก้",
+            "ชุดกิฟต์เซ็ตหลายชิ้น (มีช่องว่างภายใน)",
+            "ทรงเตี้ย/แบน",
+            "ทรงสูง/ผอมสูง",
+            "สินค้าบางเบา (วางได้หลายชั้น)",
+            "สินค้าหนัก (จำกัดจำนวนชั้น)",
+        ]
+        st.selectbox("ประเภท/ลักษณะสินค้า (ใช้กำหนด Preset ในอนาคต — ตอนนี้ยังไม่ปรับค่าอัตโนมัติ)",
+                     product_profiles, index=0)
+
+        # ตัวเลือกทิศทางแบบภาษาไทย
+        lock_options = [
+            ("ไม่ล็อก — ให้ระบบลองทุกแบบ", None, "ระบบจะลองวางทุกทิศ (H/W/L ขึ้น) แล้วเลือกแบบที่เหมาะที่สุด"),
+            ("วางแบบปกติ — H ขึ้น",        "h",  "ด้านสูง (H) อยู่ด้านบน — ไม่พลิกแกน"),
+            ("พลิกให้ด้านกว้างขึ้น — W ขึ้น", "w",  "หมุนให้ด้านกว้าง (W) เป็นแกนตั้ง/ด้านบน"),
+            ("พลิกให้ด้านยาวขึ้น — L ขึ้น",  "l",  "หมุนให้ด้านยาว (L) เป็นแกนตั้ง/ด้านบน"),
+        ]
+        labels = [name for name, _, _ in lock_options]
+        selection = st.radio(
+            "🔒 เลือกทิศทางการวาง",
+            labels, index=0, horizontal=False,
+            help="กำหนดว่าให้แกนใดของกล่องเป็นด้าน 'บน' ตอนจัดวาง",
+        )
+        locked_axis = next(val for name, val, _ in lock_options if name == selection)
+        desc = next(d for name, _, d in lock_options if name == selection)
+        st.caption(f"คำอธิบาย: {desc}")
+
+        diag_placeholder = st.empty()
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    # ===== Block 2: ตั้งค่าการวาง Gift box + ระยะเผื่อ =====
+    with col_right:
+        st.markdown("<div class='card'>", unsafe_allow_html=True)
+        st.subheader("📦 ตั้งค่าการวาง Gift box")
+
+        # หน่วยที่ใช้ (ย้ายมาบนสุด)
+        unit = st.selectbox("📏 หน่วยที่ใช้", ["mm","cm","in"], index=0)
+
+        # ขนาด giftbox
+        st.markdown("**ขนาด Giftbox**")
+        c1, c2, c3 = st.columns(3)
         gb_w = c1.number_input("กว้าง (W)", min_value=0.1, value=120.0, step=1.0)
         gb_l = c2.number_input("ยาว (L)",   min_value=0.1, value=200.0, step=1.0)
         gb_h = c3.number_input("สูง (H)",   min_value=0.1, value=80.0,  step=1.0)
 
-        lock = st.radio("🔒 ล็อกแกนตั้ง", ["ไม่ล็อก","w","l","h"], horizontal=True, index=0,
-                        help="เลือกเพื่อบังคับให้ด้านที่เลือกเป็นด้านบนตอนจัดวาง")
-        locked_axis = None if lock == "ไม่ล็อก" else lock
+        st.divider()
 
-        if locked_axis:
-            st.caption("รูปช่วยจำ W/L/H (FRONT = ด้าน y=0)")
-            st.pyplot(render_wlh_diagram_oriented(gb_w, gb_l, gb_h, up=locked_axis),
-                      use_container_width=False)
+        # จำนวนสินค้า
+        st.markdown("**จำนวนสินค้า**")
+        desired_qty = st.number_input("จำนวน giftbox ที่ต้องการ (รวม)", 1, 999999, 20, 1)
+
+        st.divider()
+
+        # จำนวนชั้น (โชว์ตลอด + เลือกให้คำนวณเองได้)
+        st.markdown("**จำนวนชั้นที่ต้องการวาง**")
+        cl1, cl2 = st.columns([1.1, 1])
+        layers_input = cl1.number_input("จำนวนชั้น (ต่อ 1 กล่อง)", 1, 50, 1, 1)
+        auto_layers  = cl2.checkbox("คิดจำนวนชั้นเอง", value=False,
+                                    help="ติ๊กเพื่อให้ระบบคำนวณจำนวนชั้นให้เอง")
+        layers_for_one = None if auto_layers else layers_input
+
         st.markdown("</div>", unsafe_allow_html=True)
 
-    with col_side:
-        st.markdown("<div class='card'>", unsafe_allow_html=True)
-        st.subheader("⚙️ การตั้งค่า")
-        unit = st.selectbox("📏 หน่วยที่ใช้", ["mm","cm","in"], index=0)
-        st.markdown("</div>", unsafe_allow_html=True)
-
+        # ---- Tolerance
         st.markdown("<div class='card'>", unsafe_allow_html=True)
         st.subheader("🛠️ ระยะเผื่อ (Tolerance)")
         base_tol = st.number_input(f"เผื่อรอบชิ้นงานต่อด้าน ({unit})", 0.0, 50.0, 0.0, 0.5)
         st.caption("Protrusion margin (เผื่อเฉพาะจุดยื่น) — ระบุเพิ่มทีละด้าน")
-        g1,g2,g3 = st.columns(3)
+        g1, g2, g3 = st.columns(3)
         with g1:
             pm_top    = st.number_input(f"Top (+H) ({unit})",    0.0, 100.0, 0.0, 0.5)
             pm_bottom = st.number_input(f"Bottom (-H) ({unit})", 0.0, 100.0, 0.0, 0.5)
@@ -429,27 +481,21 @@ with tab_carton:
         with g3:
             pm_front  = st.number_input(f"Front (-L) ({unit})",  0.0, 100.0, 0.0, 0.5)
             pm_back   = st.number_input(f"Back (+L) ({unit})",   0.0, 100.0, 0.0, 0.5)
-        try_bruteforce = st.checkbox("🔎 ลองค่าที่ใกล้เคียง (0–0.5)", value=False,
+        try_bruteforce = st.checkbox("🔎 ลองค่า tolerance หลายค่า (0–0.5)", value=False,
                                      help="ให้ระบบลอง tolerance หลายค่า (0–0.5) เพื่อหากล่องที่เหมาะที่สุด")
         st.markdown("</div>", unsafe_allow_html=True)
 
-        st.markdown("<div class='card'>", unsafe_allow_html=True)
-        st.subheader("📊 จำนวนสินค้า")
-        desired_qty = st.number_input("จำนวน giftbox ที่ต้องการ (รวม)", 1, 999999, 20, 1)
-        st.markdown("</div>", unsafe_allow_html=True)
+    # วาดรูปช่วยจำด้วยขนาดจริง
+    with col_left:
+        diag_placeholder.pyplot(
+            render_wlh_diagram_oriented(gb_w, gb_l, gb_h, up=locked_axis or "h"),
+            use_container_width=False
+        )
 
-        st.markdown("<div class='card'>", unsafe_allow_html=True)
-        st.subheader("⚙️ ตัวเลือกการจัดวาง")
-        manual_layers = st.checkbox("กำหนดจำนวนชั้นเอง", value=False)
-        layers_for_one = st.number_input("จำนวนชั้น (ต่อ 1 กล่อง)", 1, 50, 1, 1) if manual_layers else None
-        no_face_up  = st.checkbox("ห้ามหงายด้านหน้า (Front-up ไม่ได้)", value=False)
-        keep_top_up = st.checkbox("ห้ามวางกลับหัว (Top ต้องอยู่ด้านบน)", value=False)
-        st.markdown("</div>", unsafe_allow_html=True)
-
+    # ---- Compute
     st.markdown("<br>", unsafe_allow_html=True)
     calc = st.button("🚀 คำนวณขนาดกล่องที่เหมาะสม", use_container_width=True)
 
-    # ---- Compute
     def apply_margins_and_tol_rect(w,l,h,tol,pm):
         W = w + (pm["left"] + pm["right"]) + 2*tol
         L = l + (pm["front"] + pm["back"]) + 2*tol
@@ -467,21 +513,21 @@ with tab_carton:
             res = rect_design_min_carton(
                 desired_qty, iw, il, ih,
                 locked_axis=locked_axis, force_layers=layers_for_one,
-                disallow_front_up=no_face_up, keep_top_up=keep_top_up
+                disallow_front_up=False, keep_top_up=False
             )
             if res and (best is None or res.meta["SA"] < best.meta["SA"]):
                 best = res; best_tol = t
 
         if not best:
-            st.error("ไม่พบวิธีจัดวางที่เหมาะสม (ลองลดข้อจำกัด orientation หรือเพิ่มค่าเผื่อ)")
+            st.error("ไม่พบวิธีจัดวางที่เหมาะสม (ลองลดข้อจำกัดหรือเพิ่มค่าเผื่อ)")
         else:
             st.session_state.result = best
             st.session_state.tol = best_tol
             st.session_state.unit = unit
             st.session_state.qty = desired_qty
-            st.success("✅ คำนวณสำเร็จ! — ไปหน้า 'Carton ➜ Pallet' เพื่อคำนวณต่อได้เลย")
+            st.success("✅ คำนวณสำเร็จ! — ดูสรุปด้านล่างหรือไปหน้า 'Carton ➜ Pallet' ต่อได้เลย")
 
-    # ---- Show result
+    # ---- Show result (Summary in cm + Visualization)
     res = st.session_state.get("result")
     if res:
         tol  = st.session_state.get("tol", 0)
@@ -492,22 +538,32 @@ with tab_carton:
         W = res.plan.ny * res.plan.spacing_x
         L = res.plan.nx * res.plan.spacing_y
         H = res.layers * ih
-        SA = surface_area_box(W,L,H)
         per_carton = res.layers * res.per_layer
         need_cartons = math.ceil(qty / per_carton)
+
+        # แสดงผลเป็น cm เสมอ
+        W_cm = Unit.to_cm(W, unit); L_cm = Unit.to_cm(L, unit); H_cm = Unit.to_cm(H, unit)
+        tol_cm = Unit.to_cm(tol, unit)
+        SA_cm = surface_area_box(W_cm, L_cm, H_cm)  # cm²
+
+        s1, s2 = st.columns([2,3])
+        with s1:
+            st.pyplot(make_top_view(W, L, res.plan, unit, True, False, 0.45, "", 10),
+                      use_container_width=False)
+        with s2:
+            render_summary_box(L_cm, W_cm, H_cm, res.layers, res.per_layer, SA_cm, tol_cm, "cm", need_cartons)
 
         st.divider()
         st.header("🖼️ Visualization")
 
         tab2d, tab3d = st.tabs(["📐 มุมบน (2D)", "📦 ซ้อนชั้น (3D)"])
-
         with tab2d:
             left, right = st.columns([3,2])
             with right:
                 fill = st.checkbox("🟩 แสดงสี", True)
                 idx  = st.checkbox("🔢 หมายเลข", False)
                 st.markdown("### สรุป")
-                render_summary_box(L,W,H,res.layers,res.per_layer,SA,tol,unit,need_cartons)
+                render_summary_box(L_cm, W_cm, H_cm, res.layers, res.per_layer, SA_cm, tol_cm, "cm", need_cartons)
             with left:
                 st.pyplot(make_top_view(W,L,res.plan,unit, show_fill=fill, show_index=idx,
                                         scale=0.55, title_text=None, title_size=12),
@@ -529,17 +585,15 @@ with tab_carton:
             st.pyplot(make_3d_stack(W,L,res.plan,res.layers,ih, scale=0.7),
                       use_container_width=False)
 
-# ---------------- PAGE 2: Carton ➜ Pallet (Manual-only) ----------------
+# ---------------- PAGE 2: Carton ➜ Pallet (Single Block) ----------------
 with tab_pallet:
-    st.markdown("### 1) ตั้งค่าพาเลต (Pallet)")
-    p1, p2, p3, p4 = st.columns(4)
-    pal_W_cm = p1.number_input("กว้างพาเลต (cm)", 50.0, 200.0, 100.0, 1.0)
-    pal_L_cm = p2.number_input("ยาวพาเลต (cm)",   60.0, 200.0, 120.0, 1.0)
-    pal_Hmax = p3.number_input("สูงรวมไม่เกิน (cm)", 60.0, 300.0, 180.0, 1.0)
-    pal_H    = p4.number_input("ความสูงพาเลต (cm)",  5.0,  40.0,  12.0, 0.5)
+    st.markdown("<div class='card'>", unsafe_allow_html=True)
+    st.subheader("🧱 Carton ➜ Pallet")
 
-    st.markdown("### 2) ขนาดกล่อง (Carton)")
+    # 0) ดึงขนาดจากหน้าแรก (ถ้ามีผลคำนวณ)
     use_from_prev = st.checkbox("ดึงขนาดจากหน้า Giftbox ➜ Carton (ถ้ามีผลคำนวณ)", value=True)
+
+    # ค่ากล่อง (cm)
     if use_from_prev and st.session_state.get("result") is not None:
         res = st.session_state["result"]
         iw, il, ih = res.orientation
@@ -557,14 +611,30 @@ with tab_pallet:
         cart_L_cm = c2.number_input("ยาว (L) ของกล่อง (cm)",   1.0, 200.0, 40.0, 0.5)
         cart_H_cm = c3.number_input("สูง (H) ของกล่อง (cm)",   1.0, 200.0, 20.0, 0.5)
 
-    st.markdown("### 3) จำนวนกล่องต่อชั้น")
+    st.divider()
+
+    # 1) ตั้งค่าพาเลต
+    st.markdown("**ตั้งค่าพาเลต (Pallet)**")
+    p1, p2, p3, p4 = st.columns(4)
+    pal_W_cm = p1.number_input("กว้างพาเลต (cm)", 50.0, 200.0, 100.0, 1.0)
+    pal_L_cm = p2.number_input("ยาวพาเลต (cm)",   60.0, 200.0, 120.0, 1.0)
+    pal_Hmax = p3.number_input("สูงรวมไม่เกิน (cm)", 60.0, 300.0, 180.0, 1.0)
+    pal_H    = p4.number_input("ความสูงพาเลต (cm)",  5.0,  40.0,  12.0, 0.5)
+
+    st.divider()
+
+    # 2) จำนวนกล่องต่อชั้น
+    st.markdown("**จำนวนกล่องต่อชั้น**")
     n1, n2, n3 = st.columns([1.1,1.1,1])
     nx = n1.number_input("จำนวนคอลัมน์ตามแนวยาวพาเลต (nx)", 0, 100, 2, 1)
     ny = n2.number_input("จำนวนแถวตามแนวกว้างพาเลต (ny)", 0, 100, 2, 1)
     per_layer = nx * ny
     n3.metric("รวมต่อชั้น", per_layer)
 
-    st.markdown("### 4) จำนวนชั้น (layers)")
+    st.divider()
+
+    # 3) จำนวนชั้น (layers)
+    st.markdown("**จำนวนชั้น (layers)**")
     layers = st.number_input("วางกี่ชั้น", 0, 50, 5, 1)
 
     # ---------- ตรวจสอบเงื่อนไข ----------
@@ -580,16 +650,17 @@ with tab_pallet:
     if problems:
         st.error("ไม่สามารถวางได้ด้วยค่าปัจจุบัน:\n\n- " + "\n- ".join(problems))
     else:
+        # 3D
         st.pyplot(
             draw_pallet_boxes_3d(cart_L_cm, cart_W_cm, cart_H_cm,
                                  nx, ny, layers,
                                  pal_L_cm, pal_W_cm, pal_H,
-                                 gap=0.0, scale=.55,
-				  placement="center"),
+                                 gap=0.0, scale=.55, placement="center"),
             use_container_width=False
         )
+        # สรุป
         total_boxes = per_layer * layers
-        st.markdown("### 📄 สรุปการเรียงบนพาเลต (โหมดกำหนดเอง)")
+        st.markdown("### 📄 สรุปการเรียงบนพาเลต")
         st.markdown(
             f"""
 **ขนาดกล่อง (OD)** : {cart_L_cm:.0f}×{cart_W_cm:.0f}×{cart_H_cm:.0f} cm  
@@ -599,3 +670,5 @@ with tab_pallet:
 **รวมต่อพาเลต** : **{total_boxes} กล่อง**
             """
         )
+
+    st.markdown("</div>", unsafe_allow_html=True)

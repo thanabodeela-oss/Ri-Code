@@ -10,7 +10,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
-# ---------------- Thai font ----------------
+# ---------------- Thai font (sans ปกติ เพื่อเลี่ยงปัญหาบน GitHub) ----------------
 matplotlib.rcParams["font.family"] = "sans-serif"
 matplotlib.rcParams["font.sans-serif"] = [
     "Tahoma", "Sarabun", "TH Sarabun New", "Noto Sans Thai",
@@ -105,7 +105,8 @@ def rect_design_min_carton(qty, w, l, h, locked_axis: Optional[str]=None, force_
 
 # ---------------- Drawing helpers ----------------
 def make_top_view(W, L, plan, unit, show_fill=False, show_index=False,
-                  scale=0.55, title_text=None, title_size=12):
+                  scale=0.55, title_text: str = "", title_size: int = 12):
+    """วาดมุมบน (ไม่แสดงหัวเรื่องโดยอัตโนมัติ)"""
     from matplotlib.patches import Rectangle
     base = 3.6 * scale
     fig_w = base
@@ -134,19 +135,21 @@ def make_top_view(W, L, plan, unit, show_fill=False, show_index=False,
     ax.set_xlim(-frame_pad, L + frame_pad)
     ax.set_ylim(-frame_pad, W + frame_pad)
     ax.set_aspect("equal")
-    if title_text is None:
-        title_text = f"มุมบน: {W:.2f}×{L:.2f} {unit}"
-    if title_text != "":
+
+    if title_text:
         ax.set_title(title_text, fontsize=title_size, fontweight="bold")
+
     for s in ax.spines.values(): s.set_visible(False)
     ax.set_xticks([]); ax.set_yticks([])
     fig.tight_layout(pad=0.2)
     return fig
 
-def make_side_view(W, L, H, layers, plan, ih, scale=0.55, title_text=None, title_size=11):
+def make_side_view(W, L, H, layers, plan, ih, scale=0.55, title_text: str = "", title_size: int = 11):
+    """วาดมุมข้าง (ไม่แสดงหัวเรื่องโดยอัตโนมัติ)"""
     from matplotlib.patches import Rectangle
     base = 3.0 * scale
     fig, ax = plt.subplots(figsize=(base, max(2.0, base*(H/max(W,1e-6)))))
+
     frame_pad = max(W, H) * 0.02
     ax.add_patch(Rectangle((-frame_pad, -frame_pad),
                            W + 2*frame_pad, H + 2*frame_pad,
@@ -163,20 +166,20 @@ def make_side_view(W, L, H, layers, plan, ih, scale=0.55, title_text=None, title
     for x in x_pos[:-1]:
         ax.plot([x, x], [0, H], color=PALETTE["grid"], linewidth=1.6)
 
-    if title_text is None:
-        title_text = f"มุมข้าง: {W:.2f}×{H:.2f}"
-    if title_text != "":
+    if title_text:
         ax.set_title(title_text, fontsize=title_size, fontweight="bold")
 
     ax.set_xlim(-frame_pad, W + frame_pad)
     ax.set_ylim(-frame_pad, H + frame_pad)
     ax.set_aspect("auto")
+
     for s in ax.spines.values(): s.set_visible(False)
     ax.set_xticks([]); ax.set_yticks([])
     fig.tight_layout(pad=0.2)
     return fig
 
 def make_3d_stack(W, L, plan, layers, ih, scale=0.8):
+    """3D ซ้อนชั้นในกล่อง (Orthographic)"""
     fig = plt.figure(figsize=(4.2*scale, 3.1*scale))
     ax = fig.add_subplot(111, projection="3d")
     try: ax.set_proj_type('ortho')
@@ -197,6 +200,7 @@ def make_3d_stack(W, L, plan, layers, ih, scale=0.8):
     return fig
 
 def render_wlh_diagram_oriented(w, l, h, up="h", figsize=(2.6,2.0)):
+    """WLH helper (Orthographic)"""
     up = (up or "h").lower()
     if up == "h":    x_len,y_len,z_len = w,l,h
     elif up == "w":  x_len,y_len,z_len = l,h,w
@@ -337,36 +341,27 @@ with tab_carton:
     col_main, col_side = st.columns([8,4], gap="large")
 
     with col_main:
-        # 1) ลักษณะของสินค้า (Cosmetics OEM list only, no locking)
+        # 1) ลักษณะของสินค้า
         st.markdown("<div class='card'>", unsafe_allow_html=True)
         st.subheader("🧩 ลักษณะของสินค้า")
         product_type = st.selectbox(
             "เลือกหมวดสินค้า (ยังไม่ล็อกกฎใด ๆ ใช้เพื่ออ้างอิงเท่านั้น)",
             [
-                # กล่องแข็ง/พาเลตเมคอัพ
                 "ตลับแป้ง/บลัช/อายแชโดว์ (Compact/Palette)",
                 "แท่งลิปสติก/ลิปรูจ/ลิปบาล์ม (Lip Stick/Rouge/Balm)",
                 "ดินสอเขียนคิ้ว/อายไลเนอร์ (Pencil/Auto Pencil)",
                 "มาสคาร่า/คอนซีลเลอร์แบบแท่ง (Tube with Wiper)",
-
-                # ขวด/กระปุกสกินแคร์
                 "กระปุกครีม (Jar – Glass/Plastic)",
                 "ขวดดรอปเปอร์/เซรั่ม (Dropper Bottle)",
                 "ขวดปั๊ม/เออร์เลส (Pump/Airless)",
                 "ขวดสเปรย์/โทนเนอร์ (Spray/Toner Bottle)",
                 "แอมพูล/ไวอัล (Ampoule/Vial)",
-
-                # บรรจุภัณฑ์นิ่ม/ซอง
                 "ซองครีม/ซองเจล (Sachet)",
                 "แผ่นมาสก์ชีท (Sheet Mask)",
                 "ซองตั้ง/สแตนด์อัพพาวช์ (Stand-up Pouch)",
                 "บลิสเตอร์/การ์ดแพ็ก (Blister/Card)",
-
-                # ชุดเซ็ต/ของแถม
                 "กิฟต์เซ็ต/มัลติแพ็ก (Gift Set / Multipack)",
                 "กล่องพร้อมไส้/อินเสิร์ต (Carton + Insert/Tray)",
-
-                # อื่น ๆ
                 "อื่น ๆ",
             ],
             index=0
@@ -500,7 +495,7 @@ with tab_carton:
                 render_summary_box_cm(L_cm, W_cm, H_cm, res.layers, res.per_layer, SA_cm2, tol_cm, need_cartons)
             with left:
                 st.pyplot(make_top_view(W,L,res.plan,base_unit, show_fill=fill, show_index=idx,
-                                        scale=0.55, title_text=None, title_size=12),
+                                        scale=0.55, title_text="", title_size=12),
                           use_container_width=False)
             st.markdown("---")
             cA, cB = st.columns(2)
@@ -519,7 +514,7 @@ with tab_carton:
 # ---------------- PAGE 2: Carton ➜ Pallet (Carton-only view) ----------------
 with tab_pallet:
     st.markdown("<div class='card'>", unsafe_allow_html=True)
-    st.subheader("🧱 วาง Carton บนพาเลต (โชว์เฉพาะกองกล่อง)")
+    st.subheader("🧱 วาง Carton (แสดงเฉพาะกองกล่อง)")
 
     use_from_prev = st.checkbox("📥 ดึงขนาด Carton จากหน้า Giftbox ➜ Carton (ถ้ามีผลคำนวณ)", value=True)
     if use_from_prev and st.session_state.get("result") is not None:
@@ -577,31 +572,40 @@ with tab_pallet:
                 use_container_width=False
             )
         with right:
-            total_boxes = per_layer * layers
-            footprint_L = nx*cart_L_cm
-            footprint_W = ny*cart_W_cm
+            # ---------------- concise summary (เพิ่ม L/W/H แยก) ----------------
+            total_boxes  = per_layer * layers
+            stack_H      = layers * cart_H_cm
+            footprint_L  = nx * cart_L_cm
+            footprint_W  = ny * cart_W_cm
 
             st.markdown("### 📄 สรุปการเรียงบนพาเลต")
             st.markdown("""
             <style>
-            .sumcardB{background:#eef6ff;padding:12px 14px;border-radius:10px;
-                     border:1px solid #cde2ff;box-shadow:0 4px 10px rgba(0,0,0,.04);font-size:15px}
-            .sumhB{font-size:18px;font-weight:800;color:#113e7e;margin-bottom:8px}
-            .sumrowB{display:grid;grid-template-columns:auto 1fr;gap:6px 10px}
-            .sumkB{color:#3c5f8f}.sumvB{font-weight:700}
+              .sumcardB{background:#eef6ff;padding:12px 14px;border-radius:10px;
+                        border:1px solid #cde2ff;box-shadow:0 4px 10px rgba(0,0,0,.04);font-size:15px}
+              .sumhB{font-size:18px;font-weight:800;color:#113e7e;margin-bottom:8px}
+              .bul{margin:0;padding-left:18px}
+              .bul li{margin:6px 0}
+              .subbul{margin:2px 0 6px 18px;padding-left:18px;list-style:circle}
             </style>
             """, unsafe_allow_html=True)
 
-            def row(k,v): return f"<div class='sumkB'>{k}</div><div class='sumvB'>{v}</div>"
-
-            html = "".join([
-                row("ขนาดกล่อง (OD)", f"{cart_L_cm:.0f} × {cart_W_cm:.0f} × {cart_H_cm:.0f} cm"),
-                row("วางต่อชั้น",     f"{per_layer} กล่อง (nx={nx}, ny={ny})"),
-                row("จำนวนชั้น",      f"{layers} ชั้น"),
-                row("รอยเท้าบนพาเลต", f"{footprint_L:.0f} × {footprint_W:.0f} cm"),
-                row("ความสูงรวม",     f"{total_height:.1f} cm  (พาเลต {pal_H:.0f} + กล่อง {layers}×{cart_H_cm:.0f})"),
-                row("รวมต่อพาเลต",    f"{total_boxes} กล่อง"),
-            ])
-            st.markdown(f"<div class='sumcardB'><div class='sumhB'>สรุป</div><div class='sumrowB'>{html}</div></div>", unsafe_allow_html=True)
+            html = f"""
+            <div class='sumcardB'>
+              <div class='sumhB'>สรุป</div>
+              <ul class='bul'>
+                <li><b>ขนาดกองกล่องรวม</b>: {footprint_L:.0f} × {footprint_W:.0f} × {stack_H:.1f} cm</li>
+                <ul class='subbul'>
+                  <li>ยาว (L): <b>{footprint_L:.0f} cm</b></li>
+                  <li>กว้าง (W): <b>{footprint_W:.0f} cm</b></li>
+                  <li>สูง (H): <b>{stack_H:.1f} cm</b></li>
+                </ul>
+                <li><b>วางต่อชั้น</b>: {per_layer} กล่อง (nx={nx}, ny={ny})</li>
+                <li><b>จำนวนชั้น</b>: {layers} ชั้น</li>
+                <li><b>รวมต่อพาเลต</b>: {total_boxes} กล่อง</li>
+              </ul>
+            </div>
+            """
+            st.markdown(html, unsafe_allow_html=True)
 
     st.markdown("</div>", unsafe_allow_html=True)
